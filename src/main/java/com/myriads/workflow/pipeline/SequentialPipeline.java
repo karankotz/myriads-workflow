@@ -3,6 +3,7 @@ package com.myriads.workflow.pipeline;
 import com.myriads.workflow.core.Stage;
 import com.myriads.workflow.core.StageResult;
 import com.myriads.workflow.core.WorkflowContext;
+import com.myriads.workflow.core.WorkflowListener;
 import com.myriads.workflow.core.WorkflowResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,12 +32,14 @@ public final class SequentialPipeline implements Pipeline {
     }
 
     @Override
-    public WorkflowResult run(List<Stage> stages, WorkflowContext context) {
+    public WorkflowResult run(List<Stage> stages, WorkflowContext context, WorkflowListener listener) {
         List<StageResult> results = new ArrayList<>(stages.size());
 
         for (Stage stage : stages) {
+            listener.onStageStarted(context.runId(), stage.name());
             StageResult result = runStage(stage, context);
             results.add(result);
+            listener.onStageCompleted(context.runId(), result);
 
             if (result.output() != null) {
                 context.put(stage.name(), result.output());

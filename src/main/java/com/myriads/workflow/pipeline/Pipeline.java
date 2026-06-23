@@ -2,6 +2,7 @@ package com.myriads.workflow.pipeline;
 
 import com.myriads.workflow.core.Stage;
 import com.myriads.workflow.core.WorkflowContext;
+import com.myriads.workflow.core.WorkflowListener;
 import com.myriads.workflow.core.WorkflowResult;
 
 import java.util.List;
@@ -18,13 +19,19 @@ import java.util.List;
 public interface Pipeline {
 
     /**
-     * Runs the given stages against the context.
+     * Runs the given stages against the context, reporting progress to a listener.
      *
-     * @param stages  the stages to execute
-     * @param context shared run state
+     * @param stages   the stages to execute
+     * @param context  shared run state
+     * @param listener observer notified as stages start and complete
      * @return the aggregate result of the run
      */
-    WorkflowResult run(List<Stage> stages, WorkflowContext context);
+    WorkflowResult run(List<Stage> stages, WorkflowContext context, WorkflowListener listener);
+
+    /** Convenience overload that runs without observing progress. */
+    default WorkflowResult run(List<Stage> stages, WorkflowContext context) {
+        return run(stages, context, WorkflowListener.NOOP);
+    }
 
     /** Identifier used to look this pipeline up in a {@link PipelineRegistry}. */
     String id();

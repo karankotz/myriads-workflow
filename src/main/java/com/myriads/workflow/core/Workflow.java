@@ -33,6 +33,11 @@ public final class Workflow {
         return name;
     }
 
+    /** The ordered names of this workflow's stages, for display before a run. */
+    public List<String> stageNames() {
+        return stages.stream().map(Stage::name).toList();
+    }
+
     /** Runs the workflow with a freshly generated run id. */
     public WorkflowResult run() {
         return run(new WorkflowContext(UUID.randomUUID().toString()));
@@ -40,7 +45,15 @@ public final class Workflow {
 
     /** Runs the workflow against a caller-supplied context. */
     public WorkflowResult run(WorkflowContext context) {
-        return pipeline.run(stages, context);
+        return run(context, WorkflowListener.NOOP);
+    }
+
+    /** Runs the workflow against a context while reporting progress to a listener. */
+    public WorkflowResult run(WorkflowContext context, WorkflowListener listener) {
+        listener.onWorkflowStarted(context.runId(), name, stageNames());
+        WorkflowResult result = pipeline.run(stages, context, listener);
+        listener.onWorkflowCompleted(result);
+        return result;
     }
 
     public static final class Builder {

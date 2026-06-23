@@ -14,10 +14,19 @@ new ways of composing and running pipelines can be added incrementally.
 
 ```bash
 mvn clean package          # compile, test, and build a runnable fat jar
+
+# run the command-line demo:
 java -jar target/myriads-workflow.jar
 
-# or run straight from source:
-mvn -q exec:java
+# or launch the web portal (see below) and open http://localhost:8080 :
+java -jar target/myriads-workflow.jar serve 8080
+```
+
+Run straight from source instead of building a jar:
+
+```bash
+mvn -q exec:java                              # CLI demo
+mvn -q exec:java -Dexec.args="serve 8080"     # web portal
 ```
 
 Run the tests on their own:
@@ -25,6 +34,53 @@ Run the tests on their own:
 ```bash
 mvn test
 ```
+
+## Web portal
+
+A small, dependency-light portal (built on the JDK's built-in HTTP server) lists the
+available workflows and **runs them live, lighting up each stage as it executes**. Start
+it with `serve [port]` and open <http://localhost:8080>.
+
+When you run a workflow, the browser opens a [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events)
+stream. The server attaches a `WorkflowListener` to the run and turns each engine callback
+into an SSE event, so stage cards transition **pending → running → success / failed / halt**
+in real time:
+
+```mermaid
+sequenceDiagram
+    participant UI as Browser (EventSource)
+    participant Srv as WorkflowServer
+    participant WF as Workflow
+    participant P as SequentialPipeline
+
+    UI->>Srv: GET /api/workflows/{name}/stream
+    Srv->>WF: run(context, listener)
+    WF-->>Srv: onWorkflowStarted
+    Srv-->>UI: event: started
+    loop each stage
+        P-->>Srv: onStageStarted
+        Srv-->>UI: event: stage-started   (card → running)
+        P-->>Srv: onStageCompleted
+        Srv-->>UI: event: stage-completed (card → success/failed/halt)
+    end
+    WF-->>Srv: onWorkflowCompleted
+    Srv-->>UI: event: completed
+```
+
+The three bundled demo workflows exercise every outcome — one all-green run, one that
+**halts** for an approval gate, and one that **fails** on a flaky API call.
+
+### HTTP API
+
+| Method & path | Purpose |
+|---------------|---------|
+| `GET /api/workflows` | List workflows and their stage names. |
+| `GET /api/workflows/{name}` | One workflow's definition. |
+| `POST /api/workflows/{name}/run` | Run it, return the full result as JSON. |
+| `GET /api/workflows/{name}/stream` | Run it, streaming live SSE events. |
+
+Both run endpoints accept an optional `?goal=...` query param, which is seeded into the
+run's `WorkflowContext`.
 
 ## Concepts
 
@@ -37,6 +93,7 @@ mvn test
 | `Pipeline` | **The main extension point** — a strategy for executing stages. |
 | `PipelineRegistry` | Holds the available pipelines, selected by id. |
 | `Workflow` | A named list of stages run by a chosen `Pipeline`. |
+| `WorkflowListener` | Observes a run as it executes; powers the live web portal (and metrics/tracing). |
 
 ## How it works
 
@@ -155,11 +212,15 @@ introduced. The built-in `SequentialPipeline` is the reference implementation.
 ## Project layout
 
 ```
-src/main/java/com/myriads/workflow/
-├── Main.java                     # demo entry point
-├── core/                         # Stage, StageResult, WorkflowContext, Workflow, WorkflowResult
-├── agent/                        # Agent abstraction
-└── pipeline/                     # Pipeline, PipelineRegistry, SequentialPipeline
+src/main/
+├── java/com/myriads/workflow/
+│   ├── Main.java                 # entry point: CLI demo, or `serve [port]` for the portal
+│   ├── core/                     # Stage, StageResult, WorkflowContext, Workflow,
+│   │                             #   WorkflowResult, WorkflowListener
+│   ├── agent/                    # Agent abstraction
+│   ├── pipeline/                 # Pipeline, PipelineRegistry, SequentialPipeline
+│   └── web/                      # WorkflowServer, WorkflowCatalog, DemoWorkflows
+└── resources/web/index.html      # the single-page portal UI
 ```
 
 ## Roadmap
@@ -168,3 +229,4 @@ src/main/java/com/myriads/workflow/
 - Distributed execution (dispatch stages to remote workers)
 - LLM- and tool-backed agent implementations
 - Persistence / replay of `WorkflowContext`
+- Define and submit workflows from the portal (currently read-only + run)

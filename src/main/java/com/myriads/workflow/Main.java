@@ -7,8 +7,12 @@ import com.myriads.workflow.core.WorkflowContext;
 import com.myriads.workflow.core.WorkflowResult;
 import com.myriads.workflow.pipeline.PipelineRegistry;
 import com.myriads.workflow.pipeline.SequentialPipeline;
+import com.myriads.workflow.web.DemoWorkflows;
+import com.myriads.workflow.web.WorkflowServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Entry point demonstrating the starter engine with a tiny two-agent workflow.
@@ -22,7 +26,31 @@ public final class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        if (args.length > 0 && args[0].equalsIgnoreCase("serve")) {
+            serve(args);
+            return;
+        }
+        runDemo();
+    }
+
+    /** Starts the web portal and blocks until the JVM is shut down. */
+    private static void serve(String[] args) throws Exception {
+        int port = args.length > 1 ? Integer.parseInt(args[1]) : 8080;
+        WorkflowServer server = new WorkflowServer(port, DemoWorkflows.catalog());
+        server.start();
+        log.info("Open the portal at http://localhost:{}  (Ctrl+C to stop)", port);
+
+        CountDownLatch shutdown = new CountDownLatch(1);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            server.stop();
+            shutdown.countDown();
+        }));
+        shutdown.await();
+    }
+
+    /** Runs the inline demo workflow from the command line. */
+    private static void runDemo() {
         PipelineRegistry pipelines = PipelineRegistry.withDefaults();
 
         // An agent that seeds some work into the shared context.

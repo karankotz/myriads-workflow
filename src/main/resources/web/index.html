@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Myriads Workflow Portal</title>
+    <style>
+        :root {
+            --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --border: #2a2f3a;
+            --text: #e6e9ef; --muted: #8b94a7; --accent: #5b8cff;
+            --pending: #3a3f4b; --running: #5b8cff; --success: #3fb968; --failed: #e5484d; --halt: #e2a23b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg); color: var(--text);
+        }
+        header {
+            padding: 18px 24px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: baseline; gap: 12px;
+        }
+        header h1 { font-size: 18px; margin: 0; }
+        header .sub { color: var(--muted); font-size: 13px; }
+        .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 61px); }
+        aside { border-right: 1px solid var(--border); padding: 16px; }
+        aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+        .wf { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: var(--panel); }
+        .wf:hover { border-color: var(--accent); }
+        .wf.active { border-color: var(--accent); background: var(--panel-2); }
+        .wf .name { font-weight: 600; }
+        .wf .count { color: var(--muted); font-size: 12px; }
+        main { padding: 24px; }
+        .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; }
+        .toolbar input {
+            background: var(--panel); border: 1px solid var(--border); color: var(--text);
+            padding: 9px 12px; border-radius: 8px; min-width: 280px;
+        }
+        button {
+            background: var(--accent); color: white; border: none; padding: 9px 18px;
+            border-radius: 8px; font-weight: 600; cursor: pointer;
+        }
+        button:disabled { opacity: .5; cursor: default; }
+        .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 18px; display: none; font-weight: 600; }
+        .banner.show { display: block; }
+        .banner.ok { background: rgba(63,185,104,.15); color: var(--success); border: 1px solid var(--success); }
+        .banner.bad { background: rgba(229,72,77,.15); color: var(--failed); border: 1px solid var(--failed); }
+
+        .pipeline { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+        .stage {
+            position: relative; background: var(--panel); border: 1px solid var(--border);
+            border-left: 4px solid var(--pending); border-radius: 10px; padding: 14px 16px;
+            min-width: 190px; max-width: 240px; transition: border-color .2s, box-shadow .2s;
+        }
+        .stage .idx { color: var(--muted); font-size: 11px; }
+        .stage .title { font-weight: 600; margin: 2px 0 8px; }
+        .stage .state { font-size: 12px; color: var(--muted); }
+        .stage .out { margin-top: 8px; font-size: 12px; color: var(--text); word-break: break-word; }
+        .stage.running { border-left-color: var(--running); box-shadow: 0 0 0 1px var(--running); }
+        .stage.running .state { color: var(--running); }
+        .stage.success { border-left-color: var(--success); }
+        .stage.success .state { color: var(--success); }
+        .stage.failed { border-left-color: var(--failed); }
+        .stage.failed .state { color: var(--failed); }
+        .stage.halt { border-left-color: var(--halt); }
+        .stage.halt .state { color: var(--halt); }
+        .stage.skipped { opacity: .45; }
+        .arrow { display: flex; align-items: center; color: var(--muted); padding: 0 6px; font-size: 20px; }
+
+        .running .dot { animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+        .log { margin-top: 28px; }
+        .log h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+        pre#events {
+            background: #0b0d11; border: 1px solid var(--border); border-radius: 8px;
+            padding: 12px; max-height: 220px; overflow: auto; font-size: 12px; color: #b9c2d4; margin: 0;
+        }
+        .empty { color: var(--muted); }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Myriads Workflow Portal</h1>
+    <span class="sub">distributed agentic workflow — live run viewer</span>
+</header>
+
+<div class="layout">
+    <aside>
+        <h2>Workflows</h2>
+        <div id="wf-list" class="empty">Loading…</div>
+    </aside>
+
+    <main>
+        <div class="toolbar">
+            <input id="goal" type="text" placeholder="optional goal (passed into the run context)"/>
+            <button id="run" disabled>Run workflow</button>
+            <span id="selected" class="sub"></span>
+        </div>
+
+        <div id="banner" class="banner"></div>
+        <div id="pipeline" class="pipeline empty">Select a workflow to see its stages.</div>
+
+        <div class="log">
+            <h2>Event stream</h2>
+            <pre id="events" class="empty">No events yet.</pre>
+        </div>
+    </main>
+</div>
+
+<script>
+    const state = { workflows: [], selected: null, source: null };
+
+    const $ = (id) => document.getElementById(id);
+    const slug = (s) => s.replace(/[^a-z0-9]+/gi, '-');
+
+    async function loadWorkflows() {
+        const res = await fetch('/api/workflows');
+        state.workflows = await res.json();
+        const list = $('wf-list');
+        list.classList.remove('empty');
+        list.innerHTML = '';
+        state.workflows.forEach((wf) => {
+            const el = document.createElement('div');
+            el.className = 'wf';
+            el.dataset.name = wf.name;
+            el.innerHTML = `<div class="name">${wf.name}</div><div class="count">${wf.stages.length} stages</div>`;
+            el.onclick = () => select(wf.name);
+            list.appendChild(el);
+        });
+        if (state.workflows.length) select(state.workflows[0].name);
+    }
+
+    function select(name) {
+        state.selected = state.workflows.find((w) => w.name === name);
+        document.querySelectorAll('.wf').forEach((el) => el.classList.toggle('active', el.dataset.name === name));
+        $('selected').textContent = '';
+        $('run').disabled = false;
+        renderStages(state.selected.stages, {});
+        setBanner('', null);
+        $('events').textContent = 'No events yet.';
+        $('events').classList.add('empty');
+    }
+
+    function renderStages(stages, statuses) {
+        const wrap = $('pipeline');
+        wrap.classList.remove('empty');
+        wrap.innerHTML = '';
+        stages.forEach((name, i) => {
+            const stage = document.createElement('div');
+            stage.className = 'stage ' + (statuses[name] || '');
+            stage.id = 'stage-' + slug(name);
+            stage.innerHTML =
+                `<div class="idx">step ${i + 1}</div>` +
+                `<div class="title">${name}</div>` +
+                `<div class="state"><span class="dot">●</span> <span class="label">${statuses[name] || 'pending'}</span></div>` +
+                `<div class="out"></div>`;
+            wrap.appendChild(stage);
+            if (i < stages.length - 1) {
+                const arrow = document.createElement('div');
+                arrow.className = 'arrow';
+                arrow.textContent = '→';
+                wrap.appendChild(arrow);
+            }
+        });
+    }
+
+    function setStage(name, status, detail) {
+        const el = document.getElementById('stage-' + slug(name));
+        if (!el) return;
+        el.classList.remove('running', 'success', 'failed', 'halt', 'skipped');
+        el.classList.add(status);
+        el.querySelector('.label').textContent = status;
+        if (detail) el.querySelector('.out').textContent = detail;
+    }
+
+    function setBanner(text, kind) {
+        const b = $('banner');
+        b.className = 'banner' + (kind ? ' show ' + kind : '');
+        b.textContent = text;
+    }
+
+    function logEvent(type, data) {
+        const pre = $('events');
+        if (pre.classList.contains('empty')) { pre.textContent = ''; pre.classList.remove('empty'); }
+        pre.textContent += `${type}  ${JSON.stringify(data)}\n`;
+        pre.scrollTop = pre.scrollHeight;
+    }
+
+    function run() {
+        if (!state.selected) return;
+        if (state.source) state.source.close();
+
+        const stages = state.selected.stages;
+        renderStages(stages, {});
+        setBanner('', null);
+        $('events').textContent = '';
+        $('events').classList.remove('empty');
+        $('run').disabled = true;
+
+        const goal = encodeURIComponent($('goal').value || '');
+        const url = `/api/workflows/${encodeURIComponent(state.selected.name)}/stream?goal=${goal}`;
+        const es = new EventSource(url);
+        state.source = es;
+        const started = new Set();
+
+        es.addEventListener('started', (e) => logEvent('started', JSON.parse(e.data)));
+
+        es.addEventListener('stage-started', (e) => {
+            const d = JSON.parse(e.data);
+            started.add(d.stage);
+            setStage(d.stage, 'running');
+            logEvent('stage-started', d);
+        });
+
+        es.addEventListener('stage-completed', (e) => {
+            const d = JSON.parse(e.data);
+            const status = d.status.toLowerCase(); // success | halt | failed
+            setStage(d.stage, status, d.output || d.error || '');
+            logEvent('stage-completed', d);
+        });
+
+        es.addEventListener('completed', (e) => {
+            const d = JSON.parse(e.data);
+            stages.forEach((name) => { if (!started.has(name)) setStage(name, 'skipped', 'skipped'); });
+            setBanner(d.completed ? '✓ Run completed' : '✕ Run aborted (a stage failed)', d.completed ? 'ok' : 'bad');
+            logEvent('completed', d);
+            es.close();
+            $('run').disabled = false;
+        });
+
+        es.addEventListener('error', (e) => {
+            if (e.data) { logEvent('error', JSON.parse(e.data)); }
+            else { setBanner('Connection lost', 'bad'); }
+            es.close();
+            $('run').disabled = false;
+        });
+    }
+
+    $('run').onclick = run;
+    loadWorkflows().catch((err) => { $('wf-list').textContent = 'Failed to load: ' + err; });
+</script>
+</body>
+</html>
