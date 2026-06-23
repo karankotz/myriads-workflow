@@ -59,14 +59,14 @@ flowchart LR
         PAR["(your future impl)<br/>id = parallel"]
     end
 
-    A1["Agent: planner"] -->|asStage| S1["Stage"]
-    A2["Agent: executor"] -->|asStage| S2["Stage"]
+    A1["Agent: planner"] -->|"asStage()"| S1["Stage"]
+    A2["Agent: executor"] -->|"asStage()"| S2["Stage"]
 
-    S1 -->|.stage| WF["Workflow<br/>name: demo<br/>stages: [...]"]
-    S2 -->|.stage| WF
-    reg -->|.get(id) → using| WF
+    S1 -->|"stage()"| WF["Workflow<br/>name: demo<br/>stages: [...]"]
+    S2 -->|"stage()"| WF
+    reg -->|"get(id) then using()"| WF
 
-    WF -->|run(context)| RES["WorkflowResult<br/>completed + [StageResult...]"]
+    WF -->|"run(context)"| RES["WorkflowResult<br/>completed + [StageResult...]"]
 ```
 
 ### 2. Execution — what happens on `workflow.run()`
