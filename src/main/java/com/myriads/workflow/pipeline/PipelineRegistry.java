@@ -23,6 +23,7 @@ public final class PipelineRegistry {
     public static PipelineRegistry withDefaults() {
         PipelineRegistry registry = new PipelineRegistry();
         registry.register(new SequentialPipeline());
+        registry.register(new ParallelPipeline());
         return registry;
     }
 

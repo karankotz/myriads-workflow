@@ -218,8 +218,13 @@ public final class WorkflowServer {
     private void emit(OutputStream out, String event, Object data) {
         try {
             String json = mapper.writeValueAsString(data);
-            out.write(("event: " + event + "\ndata: " + json + "\n\n").getBytes(StandardCharsets.UTF_8));
-            out.flush();
+            byte[] frame = ("event: " + event + "\ndata: " + json + "\n\n").getBytes(StandardCharsets.UTF_8);
+            // A parallel pipeline emits from many threads onto this one stream;
+            // lock so SSE frames are written whole and never interleave.
+            synchronized (out) {
+                out.write(frame);
+                out.flush();
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e); // aborts the run if the client has gone away
         }

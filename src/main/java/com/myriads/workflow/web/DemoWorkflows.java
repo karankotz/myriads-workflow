@@ -4,6 +4,7 @@ import com.myriads.workflow.core.Stage;
 import com.myriads.workflow.core.StageResult;
 import com.myriads.workflow.core.Workflow;
 import com.myriads.workflow.core.WorkflowContext;
+import com.myriads.workflow.pipeline.ParallelPipeline;
 import com.myriads.workflow.pipeline.SequentialPipeline;
 
 import java.util.function.Function;
@@ -12,13 +13,21 @@ import java.util.function.Function;
  * Example workflows used to populate the portal out of the box.
  *
  * <p>Each stage sleeps briefly so the live, stage-by-stage animation in the UI
- * is easy to watch. The three workflows are chosen to exercise every outcome a
- * stage can produce — success, an early {@code HALT}, and a {@code FAILED}
- * stage that aborts the run — so the portal visibly renders all of them.
+ * is easy to watch. Together the workflows map to real use cases and exercise
+ * every outcome a stage can produce:
+ * <ul>
+ *   <li>{@code research-and-ship} — an agentic crew, all stages succeed.</li>
+ *   <li>{@code kyc-onboarding} — customer onboarding that {@code HALT}s at a
+ *       human approval gate.</li>
+ *   <li>{@code ci-cd-deploy} — a release pipeline that {@code FAILED}s on a
+ *       smoke test and skips promotion to prod.</li>
+ *   <li>{@code security-scan} — independent scans fanned out concurrently with
+ *       the {@link ParallelPipeline}.</li>
+ * </ul>
  */
 public final class DemoWorkflows {
 
-    /** Roughly how long each demo stage "works" for, to make the UI animate. */
+    /** Default time each demo stage "works" for, to make the UI animate. */
     private static final long STEP_MILLIS = 600;
 
     private DemoWorkflows() {
@@ -26,10 +35,11 @@ public final class DemoWorkflows {
 
     /** Builds a catalog preloaded with the example workflows. */
     public static WorkflowCatalog catalog() {
-        SequentialPipeline pipeline = new SequentialPipeline();
+        SequentialPipeline sequential = new SequentialPipeline();
+        ParallelPipeline parallel = new ParallelPipeline();
 
-        Workflow happyPath = Workflow.named("research-and-ship")
-                .using(pipeline)
+        Workflow researchAndShip = Workflow.named("research-and-ship")
+                .using(sequential)
                 .stage(step("intake", ctx -> "goal=" + ctx.get("goal", String.class).orElse("(none)")))
                 .stage(step("plan", ctx -> "plan for " + ctx.get("intake").orElse("?")))
                 .stage(step("research", ctx -> "gathered 3 sources"))
@@ -37,30 +47,55 @@ public final class DemoWorkflows {
                 .stage(step("summarize", ctx -> "done: " + ctx.get("execute").orElse("?")))
                 .build();
 
-        Workflow haltsEarly = Workflow.named("guarded-run")
-                .using(pipeline)
-                .stage(step("intake", ctx -> "received request"))
-                .stage(haltStep("approval-gate", "halted: awaiting human approval"))
-                .stage(step("execute", ctx -> "this stage is skipped after the halt"))
+        // Customer onboarding / KYC: stops for a human at the manual-review gate.
+        Workflow kycOnboarding = Workflow.named("kyc-onboarding")
+                .using(sequential)
+                .stage(step("collect-documents", ctx -> "passport + proof-of-address received"))
+                .stage(step("verify-identity", ctx -> "identity matched (98%)"))
+                .stage(step("sanctions-screening", ctx -> "no sanctions hits"))
+                .stage(step("risk-scoring", ctx -> "risk=MEDIUM"))
+                .stage(haltStep("manual-review", "halted: MEDIUM risk requires a compliance officer"))
+                .stage(step("provision-account", ctx -> "skipped until approved"))
+                .stage(step("send-welcome-email", ctx -> "skipped until approved"))
                 .build();
 
-        Workflow failsMidway = Workflow.named("flaky-run")
-                .using(pipeline)
-                .stage(step("intake", ctx -> "received request"))
-                .stage(failStep("call-external-api", "upstream service returned 503"))
-                .stage(step("persist", ctx -> "this stage is skipped after the failure"))
+        // CI/CD release: smoke test fails on staging, so prod promotion is skipped.
+        Workflow ciCdDeploy = Workflow.named("ci-cd-deploy")
+                .using(sequential)
+                .stage(step("checkout", ctx -> "main @ a1b2c3d"))
+                .stage(step("build", ctx -> "artifact built"))
+                .stage(step("unit-tests", ctx -> "412 passed"))
+                .stage(step("package", ctx -> "image myriads:a1b2c3d"))
+                .stage(step("deploy-staging", ctx -> "rolled out to staging"))
+                .stage(failStep("smoke-test", "staging health check failed: /readyz 503"))
+                .stage(step("promote-prod", ctx -> "skipped after smoke-test failure"))
+                .build();
+
+        // Independent scans that run at the same time — staggered to show concurrency.
+        Workflow securityScan = Workflow.named("security-scan")
+                .using(parallel)
+                .stage(step("dependency-audit", 700, ctx -> "0 critical CVEs"))
+                .stage(step("secret-detection", 1100, ctx -> "no secrets found"))
+                .stage(step("license-check", 500, ctx -> "all licenses compatible"))
+                .stage(step("sast-analysis", 1400, ctx -> "2 low-severity findings"))
                 .build();
 
         return new WorkflowCatalog()
-                .register(happyPath)
-                .register(haltsEarly)
-                .register(failsMidway);
+                .register(researchAndShip)
+                .register(kycOnboarding)
+                .register(ciCdDeploy)
+                .register(securityScan);
     }
 
     /** A stage that "works" for {@link #STEP_MILLIS} then succeeds with the given output. */
     private static Stage step(String name, Function<WorkflowContext, Object> body) {
+        return step(name, STEP_MILLIS, body);
+    }
+
+    /** A stage that "works" for {@code delayMillis} then succeeds with the given output. */
+    private static Stage step(String name, long delayMillis, Function<WorkflowContext, Object> body) {
         return named(name, ctx -> {
-            pause();
+            pause(delayMillis);
             return StageResult.success(name, body.apply(ctx));
         });
     }
@@ -68,7 +103,7 @@ public final class DemoWorkflows {
     /** A stage that halts the run cleanly. */
     private static Stage haltStep(String name, String message) {
         return named(name, ctx -> {
-            pause();
+            pause(STEP_MILLIS);
             return StageResult.halt(name, message);
         });
     }
@@ -76,7 +111,7 @@ public final class DemoWorkflows {
     /** A stage that fails, aborting the run. */
     private static Stage failStep(String name, String message) {
         return named(name, ctx -> {
-            pause();
+            pause(STEP_MILLIS);
             throw new IllegalStateException(message);
         });
     }
@@ -95,9 +130,9 @@ public final class DemoWorkflows {
         };
     }
 
-    private static void pause() {
+    private static void pause(long millis) {
         try {
-            Thread.sleep(STEP_MILLIS);
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

@@ -67,8 +67,14 @@ sequenceDiagram
     Srv-->>UI: event: completed
 ```
 
-The three bundled demo workflows exercise every outcome — one all-green run, one that
-**halts** for an approval gate, and one that **fails** on a flaky API call.
+The four bundled demo workflows map to real use cases and exercise every outcome:
+
+| Workflow | Use case | What it shows |
+|----------|----------|---------------|
+| `research-and-ship` | agentic crew | all stages succeed (green) |
+| `kyc-onboarding` | customer onboarding / KYC | **halts** at a manual-review gate (amber) |
+| `ci-cd-deploy` | release pipeline | **fails** on a smoke test, skips prod promotion (red) |
+| `security-scan` | parallel scans | runs four stages **concurrently** via `ParallelPipeline` |
 
 ### HTTP API
 
@@ -177,22 +183,35 @@ flowchart TD
 > When you add a new pipeline, only **diagram 2** changes (e.g. stages fan out across
 > threads instead of looping in order). Diagrams 1 and 3 stay the same.
 
-## Adding a new pipeline
+## Pipelines
 
-Pipelines are how new execution semantics (parallel, branching, distributed, ...) are
-introduced. The built-in `SequentialPipeline` is the reference implementation.
+Pipelines are how new execution semantics (branching, distributed, ...) are introduced.
+Two are built in and registered by `PipelineRegistry.withDefaults()`:
 
-1. Implement `Pipeline`:
+| Pipeline | `id` | Semantics |
+|----------|------|-----------|
+| `SequentialPipeline` | `sequential` | runs stages in order; a `FAILED`/`HALT` stops the run |
+| `ParallelPipeline` | `parallel` | runs all stages concurrently (one virtual thread each), waits for all |
+
+`ParallelPipeline` suits **independent** stages (parallel scans, multi-region deploys, an
+agent crew that doesn't share state). Because stages run at once, ordering between them is
+undefined — use `SequentialPipeline` when a stage depends on another's `WorkflowContext`
+output.
+
+### Adding your own
+
+1. Implement `Pipeline` (the `run(stages, context)` overload defaults to no-op progress;
+   implement the 3-arg version to report stage events to the `WorkflowListener`):
 
    ```java
-   public final class ParallelPipeline implements Pipeline {
-       public static final String ID = "parallel";
+   public final class BranchingPipeline implements Pipeline {
+       public static final String ID = "branching";
 
        @Override public String id() { return ID; }
 
        @Override
-       public WorkflowResult run(List<Stage> stages, WorkflowContext context) {
-           // fan stages out across threads / remote workers, collect results
+       public WorkflowResult run(List<Stage> stages, WorkflowContext ctx, WorkflowListener listener) {
+           // route to different stages based on a classifier stage's output
        }
    }
    ```
@@ -201,10 +220,10 @@ introduced. The built-in `SequentialPipeline` is the reference implementation.
 
    ```java
    PipelineRegistry pipelines = PipelineRegistry.withDefaults()
-           .register(new ParallelPipeline());
+           .register(new BranchingPipeline());
 
    Workflow wf = Workflow.named("demo")
-           .using(pipelines.get(ParallelPipeline.ID))
+           .using(pipelines.get(BranchingPipeline.ID))
            .stage(plannerAgent.asStage())
            .build();
    ```
@@ -218,14 +237,16 @@ src/main/
 │   ├── core/                     # Stage, StageResult, WorkflowContext, Workflow,
 │   │                             #   WorkflowResult, WorkflowListener
 │   ├── agent/                    # Agent abstraction
-│   ├── pipeline/                 # Pipeline, PipelineRegistry, SequentialPipeline
+│   ├── pipeline/                 # Pipeline, PipelineRegistry,
+│   │                             #   SequentialPipeline, ParallelPipeline
 │   └── web/                      # WorkflowServer, WorkflowCatalog, DemoWorkflows
 └── resources/web/index.html      # the single-page portal UI
 ```
 
 ## Roadmap
 
-- Parallel and branching pipelines
+- ~~Parallel pipeline~~ ✅ (`ParallelPipeline`)
+- Branching / conditional pipelines (route on a stage's output)
 - Distributed execution (dispatch stages to remote workers)
 - LLM- and tool-backed agent implementations
 - Persistence / replay of `WorkflowContext`
