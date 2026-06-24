@@ -1,5 +1,6 @@
 package com.myriads.workflow.web;
 
+import com.myriads.workflow.agent.ClaudeAgent;
 import com.myriads.workflow.core.Stage;
 import com.myriads.workflow.core.StageResult;
 import com.myriads.workflow.core.Workflow;
@@ -84,7 +85,33 @@ public final class DemoWorkflows {
                 .register(researchAndShip)
                 .register(kycOnboarding)
                 .register(ciCdDeploy)
-                .register(securityScan);
+                .register(securityScan)
+                .register(aiResearchCrew(sequential));
+    }
+
+    /**
+     * A crew of real Claude-backed agents chained together: each agent reads the
+     * previous one's output from the context and feeds the next. Requires
+     * {@code ANTHROPIC_API_KEY}; without it the first stage fails with a clear
+     * message (visible in the portal).
+     */
+    private static Workflow aiResearchCrew(SequentialPipeline pipeline) {
+        return Workflow.named("ai-research-crew")
+                .using(pipeline)
+                .stage(new ClaudeAgent("planner",
+                        "You are a planning agent. Given a goal, outline a focused 3-step plan. "
+                                + "Respond in under 70 words, as a numbered list.",
+                        ctx -> "Goal: " + ctx.get("goal", String.class)
+                                .orElse("introduce the Myriads distributed workflow engine")).asStage())
+                .stage(new ClaudeAgent("researcher",
+                        "You are a research agent. Given a plan, list the key facts, risks, or "
+                                + "considerations for each step. Respond in under 90 words.",
+                        ctx -> "Plan:\n" + ctx.get("planner").orElse("")).asStage())
+                .stage(new ClaudeAgent("writer",
+                        "You are a writing agent. Given research notes, write a concise, polished "
+                                + "summary a stakeholder could read. Respond in under 100 words.",
+                        ctx -> "Research notes:\n" + ctx.get("researcher").orElse("")).asStage())
+                .build();
     }
 
     /** A stage that "works" for {@link #STEP_MILLIS} then succeeds with the given output. */

@@ -59,8 +59,15 @@ and a final `event: completed`.
 
 Both run endpoints accept `?goal=...`, seeded into the run's `WorkflowContext`.
 
-Bundled demo workflows: `research-and-ship` (all succeed), `guarded-run` (halts early),
-`flaky-run` (fails midway) — useful for confirming success / halt / failure rendering.
+Bundled demo workflows: `research-and-ship` (all succeed), `kyc-onboarding` (halts at a
+review gate), `ci-cd-deploy` (fails at smoke-test), `security-scan` (parallel fan-out),
+and `ai-research-crew` (real Claude agents) — useful for confirming success / halt /
+failure / concurrent rendering.
+
+The `ai-research-crew` workflow calls the Claude API and needs `ANTHROPIC_API_KEY` set in
+the environment (optional `MYRIADS_MODEL`, default `claude-opus-4-8`). Without the key it
+fails on the first stage with a clear message; the other workflows are simulated and run
+regardless. CLI form: `java -jar target/myriads-workflow.jar ai "<goal>"`.
 
 ## Run the CLI demo instead
 

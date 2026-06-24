@@ -3,241 +3,280 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Myriads Workflow Portal</title>
+    <title>Myriads Workflow — Showcase</title>
     <style>
         :root {
-            --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --border: #2a2f3a;
-            --text: #e6e9ef; --muted: #8b94a7; --accent: #5b8cff;
-            --pending: #3a3f4b; --running: #5b8cff; --success: #3fb968; --failed: #e5484d; --halt: #e2a23b;
+            --bg: #0b0d12; --bg-2: #0f131b; --panel: #151a24; --panel-2: #1b212e;
+            --border: #283041; --text: #eef1f7; --muted: #93a0b7; --accent: #6b9bff; --accent-2: #9d7bff;
+            --pending: #3a4254; --running: #6b9bff; --success: #36c281; --failed: #ff5d63; --halt: #f0ad3c; --skipped: #2a3140;
         }
         * { box-sizing: border-box; }
+        html, body { margin: 0; }
         body {
-            margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg); color: var(--text);
+            font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(1100px 500px at 12% -8%, rgba(107,155,255,.16), transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, rgba(157,123,255,.14), transparent 55%),
+                var(--bg);
+            min-height: 100vh;
         }
-        header {
-            padding: 18px 24px; border-bottom: 1px solid var(--border);
-            display: flex; align-items: baseline; gap: 12px;
+        .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 24px 64px; }
+
+        header.hero {
+            display: flex; align-items: flex-end; justify-content: space-between;
+            gap: 20px; flex-wrap: wrap; margin-bottom: 22px;
         }
-        header h1 { font-size: 18px; margin: 0; }
-        header .sub { color: var(--muted); font-size: 13px; }
-        .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 61px); }
-        aside { border-right: 1px solid var(--border); padding: 16px; }
-        aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
-        .wf { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: var(--panel); }
-        .wf:hover { border-color: var(--accent); }
-        .wf.active { border-color: var(--accent); background: var(--panel-2); }
-        .wf .name { font-weight: 600; }
-        .wf .count { color: var(--muted); font-size: 12px; }
-        main { padding: 24px; }
-        .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; }
-        .toolbar input {
+        .hero .brand .kicker { color: var(--accent); font-weight: 700; letter-spacing: .14em; font-size: 11px; text-transform: uppercase; }
+        .hero h1 { margin: 4px 0 2px; font-size: 30px; letter-spacing: -.02em;
+            background: linear-gradient(90deg, #fff, #b9c6e6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .hero .tag { color: var(--muted); font-size: 14px; }
+        .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .controls input {
             background: var(--panel); border: 1px solid var(--border); color: var(--text);
-            padding: 9px 12px; border-radius: 8px; min-width: 280px;
+            padding: 10px 13px; border-radius: 10px; min-width: 240px; outline: none;
         }
+        .controls input:focus { border-color: var(--accent); }
         button {
-            background: var(--accent); color: white; border: none; padding: 9px 18px;
-            border-radius: 8px; font-weight: 600; cursor: pointer;
+            border: none; border-radius: 10px; font-weight: 650; cursor: pointer; font-size: 13px;
+            padding: 10px 16px; color: #fff; transition: transform .05s ease, opacity .2s;
         }
-        button:disabled { opacity: .5; cursor: default; }
-        .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 18px; display: none; font-weight: 600; }
-        .banner.show { display: block; }
-        .banner.ok { background: rgba(63,185,104,.15); color: var(--success); border: 1px solid var(--success); }
-        .banner.bad { background: rgba(229,72,77,.15); color: var(--failed); border: 1px solid var(--failed); }
+        button:active { transform: translateY(1px); }
+        button:disabled { opacity: .45; cursor: default; }
+        button.primary { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+        button.ghost { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 8px 14px; }
 
-        .pipeline { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
-        .stage {
-            position: relative; background: var(--panel); border: 1px solid var(--border);
-            border-left: 4px solid var(--pending); border-radius: 10px; padding: 14px 16px;
-            min-width: 190px; max-width: 240px; transition: border-color .2s, box-shadow .2s;
-        }
-        .stage .idx { color: var(--muted); font-size: 11px; }
-        .stage .title { font-weight: 600; margin: 2px 0 8px; }
-        .stage .state { font-size: 12px; color: var(--muted); }
-        .stage .out { margin-top: 8px; font-size: 12px; color: var(--text); word-break: break-word; }
-        .stage.running { border-left-color: var(--running); box-shadow: 0 0 0 1px var(--running); }
-        .stage.running .state { color: var(--running); }
-        .stage.success { border-left-color: var(--success); }
-        .stage.success .state { color: var(--success); }
-        .stage.failed { border-left-color: var(--failed); }
-        .stage.failed .state { color: var(--failed); }
-        .stage.halt { border-left-color: var(--halt); }
-        .stage.halt .state { color: var(--halt); }
-        .stage.skipped { opacity: .45; }
-        .arrow { display: flex; align-items: center; color: var(--muted); padding: 0 6px; font-size: 20px; }
+        .legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+            background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 16px; margin-bottom: 22px; }
+        .legend .item { display: flex; gap: 7px; align-items: center; color: var(--muted); font-size: 12px; }
+        .swatch { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+        .sw-pending { background: var(--pending); } .sw-running { background: var(--running); }
+        .sw-success { background: var(--success); } .sw-failed { background: var(--failed); }
+        .sw-halt { background: var(--halt); } .sw-skipped { background: var(--skipped); }
 
-        .running .dot { animation: pulse 1s infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+        .cards { display: flex; flex-direction: column; gap: 18px; }
+        .card { background: linear-gradient(180deg, var(--panel), var(--bg-2));
+            border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+        .card .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+        .card .title { display: flex; align-items: center; gap: 10px; }
+        .card .title .name { font-size: 17px; font-weight: 700; }
+        .badge { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+            padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+        .badge.parallel { color: var(--accent-2); border-color: rgba(157,123,255,.5); background: rgba(157,123,255,.1); }
+        .badge.sequential { color: var(--accent); border-color: rgba(107,155,255,.45); background: rgba(107,155,255,.08); }
+        .card .right { display: flex; align-items: center; gap: 12px; }
+        .pill { font-size: 12px; font-weight: 650; padding: 5px 11px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+        .pill.ok { color: var(--success); border-color: rgba(54,194,129,.5); background: rgba(54,194,129,.1); }
+        .pill.bad { color: var(--failed); border-color: rgba(255,93,99,.5); background: rgba(255,93,99,.1); }
+        .pill.halt { color: var(--halt); border-color: rgba(240,173,60,.5); background: rgba(240,173,60,.1); }
+        .pill.run { color: var(--running); border-color: rgba(107,155,255,.5); background: rgba(107,155,255,.1); }
 
-        .log { margin-top: 28px; }
-        .log h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-        pre#events {
-            background: #0b0d11; border: 1px solid var(--border); border-radius: 8px;
-            padding: 12px; max-height: 220px; overflow: auto; font-size: 12px; color: #b9c2d4; margin: 0;
-        }
-        .empty { color: var(--muted); }
+        .track { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0; }
+        .track.parallel { gap: 10px; padding: 12px; border: 1px dashed rgba(157,123,255,.45); border-radius: 12px; background: rgba(157,123,255,.05); }
+        .node { position: relative; min-width: 150px; flex: 1 1 0; background: var(--panel-2);
+            border: 1px solid var(--border); border-top: 3px solid var(--pending); border-radius: 11px;
+            padding: 11px 13px; transition: border-color .25s, box-shadow .25s, opacity .25s; }
+        .node .idx { font-size: 10px; color: var(--muted); letter-spacing: .05em; }
+        .node .nm { font-weight: 650; font-size: 13px; margin: 2px 0 7px; }
+        .node .st { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+        .node .out { font-size: 11px; color: var(--text); margin-top: 7px; opacity: .85; min-height: 1px; word-break: break-word; }
+        .node .ic { width: 14px; text-align: center; }
+        .arrow { display: flex; align-items: center; color: #44506a; font-size: 18px; padding: 0 8px; align-self: center; }
+
+        .node.running { border-top-color: var(--running); box-shadow: 0 0 0 1px var(--running), 0 0 22px rgba(107,155,255,.25); }
+        .node.running .st { color: var(--running); }
+        .node.running .ic { animation: spin 1s linear infinite; display: inline-block; }
+        .node.success { border-top-color: var(--success); } .node.success .st { color: var(--success); }
+        .node.failed  { border-top-color: var(--failed);  } .node.failed .st  { color: var(--failed); }
+        .node.halt    { border-top-color: var(--halt);    } .node.halt .st    { color: var(--halt); }
+        .node.skipped { opacity: .4; border-top-color: var(--skipped); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .foot { margin-top: 24px; color: var(--muted); font-size: 12px; text-align: center; }
+        .foot code { background: var(--panel); padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); color: #c7d2ea; }
+        .status-line { color: var(--muted); font-size: 12.5px; margin: 0 2px 14px; min-height: 16px; }
     </style>
 </head>
 <body>
-<header>
-    <h1>Myriads Workflow Portal</h1>
-    <span class="sub">distributed agentic workflow — live run viewer</span>
-</header>
-
-<div class="layout">
-    <aside>
-        <h2>Workflows</h2>
-        <div id="wf-list" class="empty">Loading…</div>
-    </aside>
-
-    <main>
-        <div class="toolbar">
-            <input id="goal" type="text" placeholder="optional goal (passed into the run context)"/>
-            <button id="run" disabled>Run workflow</button>
-            <span id="selected" class="sub"></span>
+<div class="wrap">
+    <header class="hero">
+        <div class="brand">
+            <div class="kicker">Myriads Workflow</div>
+            <h1>Distributed Agentic Workflows</h1>
+            <div class="tag">Watch every pipeline run live — stage by stage, in real time.</div>
         </div>
-
-        <div id="banner" class="banner"></div>
-        <div id="pipeline" class="pipeline empty">Select a workflow to see its stages.</div>
-
-        <div class="log">
-            <h2>Event stream</h2>
-            <pre id="events" class="empty">No events yet.</pre>
+        <div class="controls">
+            <input id="goal" type="text" placeholder="optional goal (seeded into the run context)"/>
+            <button id="runAll" class="primary">▶ Run all</button>
+            <button id="reset" class="ghost">Reset</button>
         </div>
-    </main>
+    </header>
+
+    <div class="legend">
+        <span class="item"><span class="swatch sw-pending"></span> pending</span>
+        <span class="item"><span class="swatch sw-running"></span> running</span>
+        <span class="item"><span class="swatch sw-success"></span> success</span>
+        <span class="item"><span class="swatch sw-halt"></span> halt</span>
+        <span class="item"><span class="swatch sw-failed"></span> failed</span>
+        <span class="item"><span class="swatch sw-skipped"></span> skipped</span>
+    </div>
+
+    <div id="status" class="status-line"></div>
+    <div id="cards" class="cards"></div>
+
+    <div class="foot">
+        Live data via Server-Sent Events from <code>GET /api/workflows/{name}/stream</code>.
+        Sequential pipelines run in order; <span style="color:var(--accent-2)">parallel</span> pipelines fan out concurrently.
+    </div>
 </div>
 
 <script>
-    const state = { workflows: [], selected: null, source: null };
-
+    const ICON = { pending: '○', running: '◌', success: '✓', failed: '✕', halt: '⏸', skipped: '–' };
+    const slug = (s) => s.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     const $ = (id) => document.getElementById(id);
-    const slug = (s) => s.replace(/[^a-z0-9]+/gi, '-');
 
-    async function loadWorkflows() {
+    const state = { workflows: [], sources: {} };
+
+    async function load() {
         const res = await fetch('/api/workflows');
         state.workflows = await res.json();
-        const list = $('wf-list');
-        list.classList.remove('empty');
-        list.innerHTML = '';
-        state.workflows.forEach((wf) => {
-            const el = document.createElement('div');
-            el.className = 'wf';
-            el.dataset.name = wf.name;
-            el.innerHTML = `<div class="name">${wf.name}</div><div class="count">${wf.stages.length} stages</div>`;
-            el.onclick = () => select(wf.name);
-            list.appendChild(el);
-        });
-        if (state.workflows.length) select(state.workflows[0].name);
+        render();
     }
 
-    function select(name) {
-        state.selected = state.workflows.find((w) => w.name === name);
-        document.querySelectorAll('.wf').forEach((el) => el.classList.toggle('active', el.dataset.name === name));
-        $('selected').textContent = '';
-        $('run').disabled = false;
-        renderStages(state.selected.stages, {});
-        setBanner('', null);
-        $('events').textContent = 'No events yet.';
-        $('events').classList.add('empty');
+    function render() {
+        const root = $('cards');
+        root.innerHTML = '';
+        state.workflows.forEach((wf) => root.appendChild(cardFor(wf)));
     }
 
-    function renderStages(stages, statuses) {
-        const wrap = $('pipeline');
-        wrap.classList.remove('empty');
-        wrap.innerHTML = '';
-        stages.forEach((name, i) => {
-            const stage = document.createElement('div');
-            stage.className = 'stage ' + (statuses[name] || '');
-            stage.id = 'stage-' + slug(name);
-            stage.innerHTML =
-                `<div class="idx">step ${i + 1}</div>` +
-                `<div class="title">${name}</div>` +
-                `<div class="state"><span class="dot">●</span> <span class="label">${statuses[name] || 'pending'}</span></div>` +
-                `<div class="out"></div>`;
-            wrap.appendChild(stage);
-            if (i < stages.length - 1) {
-                const arrow = document.createElement('div');
-                arrow.className = 'arrow';
-                arrow.textContent = '→';
-                wrap.appendChild(arrow);
-            }
-        });
+    function cardFor(wf) {
+        const ws = slug(wf.name);
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.id = 'card-' + ws;
+
+        const isParallel = wf.pipeline === 'parallel';
+        const nodes = wf.stages.map((name, i) => `
+            <div class="node" id="node-${ws}--${slug(name)}">
+                <div class="idx">${isParallel ? 'branch' : 'step'} ${i + 1}</div>
+                <div class="nm">${name}</div>
+                <div class="st"><span class="ic">${ICON.pending}</span><span class="lbl">pending</span></div>
+                <div class="out"></div>
+            </div>`);
+        const track = isParallel
+            ? `<div class="track parallel">${nodes.join('')}</div>`
+            : `<div class="track">${nodes.join('<div class="arrow">→</div>')}</div>`;
+
+        card.innerHTML = `
+            <div class="top">
+                <div class="title">
+                    <span class="name">${wf.name}</span>
+                    <span class="badge ${wf.pipeline}">${wf.pipeline}</span>
+                </div>
+                <div class="right">
+                    <span class="pill" id="pill-${ws}">${wf.stages.length} stages</span>
+                    <button class="ghost run-btn" data-wf="${wf.name}">▶ Run</button>
+                </div>
+            </div>
+            ${track}`;
+        card.querySelector('.run-btn').onclick = () => runWorkflow(wf);
+        return card;
     }
 
-    function setStage(name, status, detail) {
-        const el = document.getElementById('stage-' + slug(name));
+    function setNode(ws, name, status, detail) {
+        const el = document.getElementById(`node-${ws}--${slug(name)}`);
         if (!el) return;
         el.classList.remove('running', 'success', 'failed', 'halt', 'skipped');
-        el.classList.add(status);
-        el.querySelector('.label').textContent = status;
+        if (status !== 'pending') el.classList.add(status);
+        el.querySelector('.ic').textContent = ICON[status] || ICON.pending;
+        el.querySelector('.lbl').textContent = status;
         if (detail) el.querySelector('.out').textContent = detail;
     }
 
-    function setBanner(text, kind) {
-        const b = $('banner');
-        b.className = 'banner' + (kind ? ' show ' + kind : '');
-        b.textContent = text;
+    function setPill(ws, text, kind) {
+        const pill = $('pill-' + ws);
+        pill.className = 'pill' + (kind ? ' ' + kind : '');
+        pill.textContent = text;
     }
 
-    function logEvent(type, data) {
-        const pre = $('events');
-        if (pre.classList.contains('empty')) { pre.textContent = ''; pre.classList.remove('empty'); }
-        pre.textContent += `${type}  ${JSON.stringify(data)}\n`;
-        pre.scrollTop = pre.scrollHeight;
+    function resetCard(wf) {
+        const ws = slug(wf.name);
+        wf.stages.forEach((name) => {
+            setNode(ws, name, 'pending', '');
+            const el = document.getElementById(`node-${ws}--${slug(name)}`);
+            if (el) el.querySelector('.out').textContent = '';
+        });
+        setPill(ws, wf.stages.length + ' stages', '');
     }
 
-    function run() {
-        if (!state.selected) return;
-        if (state.source) state.source.close();
+    function runWorkflow(wf) {
+        const ws = slug(wf.name);
+        if (state.sources[ws]) state.sources[ws].close();
+        resetCard(wf);
+        setPill(ws, 'running…', 'run');
+        toggleButtons(true);
 
-        const stages = state.selected.stages;
-        renderStages(stages, {});
-        setBanner('', null);
-        $('events').textContent = '';
-        $('events').classList.remove('empty');
-        $('run').disabled = true;
-
-        const goal = encodeURIComponent($('goal').value || '');
-        const url = `/api/workflows/${encodeURIComponent(state.selected.name)}/stream?goal=${goal}`;
-        const es = new EventSource(url);
-        state.source = es;
         const started = new Set();
-
-        es.addEventListener('started', (e) => logEvent('started', JSON.parse(e.data)));
+        const goal = encodeURIComponent($('goal').value || '');
+        const es = new EventSource(`/api/workflows/${encodeURIComponent(wf.name)}/stream?goal=${goal}`);
+        state.sources[ws] = es;
 
         es.addEventListener('stage-started', (e) => {
             const d = JSON.parse(e.data);
             started.add(d.stage);
-            setStage(d.stage, 'running');
-            logEvent('stage-started', d);
+            setNode(ws, d.stage, 'running');
         });
-
         es.addEventListener('stage-completed', (e) => {
             const d = JSON.parse(e.data);
-            const status = d.status.toLowerCase(); // success | halt | failed
-            setStage(d.stage, status, d.output || d.error || '');
-            logEvent('stage-completed', d);
+            setNode(ws, d.stage, d.status.toLowerCase(), d.output || d.error || '');
         });
-
         es.addEventListener('completed', (e) => {
             const d = JSON.parse(e.data);
-            stages.forEach((name) => { if (!started.has(name)) setStage(name, 'skipped', 'skipped'); });
-            setBanner(d.completed ? '✓ Run completed' : '✕ Run aborted (a stage failed)', d.completed ? 'ok' : 'bad');
-            logEvent('completed', d);
-            es.close();
-            $('run').disabled = false;
+            wf.stages.forEach((name) => { if (!started.has(name)) setNode(ws, name, 'skipped', 'skipped'); });
+            const halted = !d.completed ? false : anyHalt(ws);
+            if (!d.completed) setPill(ws, '✕ aborted', 'bad');
+            else if (halted) setPill(ws, '⏸ halted', 'halt');
+            else setPill(ws, '✓ completed', 'ok');
+            es.close(); delete state.sources[ws];
+            updateStatus();
         });
-
-        es.addEventListener('error', (e) => {
-            if (e.data) { logEvent('error', JSON.parse(e.data)); }
-            else { setBanner('Connection lost', 'bad'); }
-            es.close();
-            $('run').disabled = false;
+        es.addEventListener('error', () => {
+            if (es.readyState === EventSource.CLOSED) return;
+            setPill(ws, 'connection lost', 'bad');
+            es.close(); delete state.sources[ws]; updateStatus();
         });
+        updateStatus();
     }
 
-    $('run').onclick = run;
-    loadWorkflows().catch((err) => { $('wf-list').textContent = 'Failed to load: ' + err; });
+    function anyHalt(ws) {
+        return !!document.querySelector(`#card-${ws} .node.halt`);
+    }
+
+    function runAll() {
+        state.workflows.forEach((wf) => runWorkflow(wf));
+    }
+
+    function resetAll() {
+        Object.values(state.sources).forEach((es) => es.close());
+        state.sources = {};
+        state.workflows.forEach(resetCard);
+        updateStatus();
+    }
+
+    function toggleButtons() {
+        const running = Object.keys(state.sources).length > 0;
+        $('runAll').disabled = running;
+    }
+
+    function updateStatus() {
+        toggleButtons();
+        const n = Object.keys(state.sources).length;
+        $('status').textContent = n ? `Running ${n} workflow${n > 1 ? 's' : ''}…` : '';
+    }
+
+    $('runAll').onclick = runAll;
+    $('reset').onclick = resetAll;
+    load().catch((err) => { $('status').textContent = 'Failed to load workflows: ' + err; });
 </script>
 </body>
 </html>

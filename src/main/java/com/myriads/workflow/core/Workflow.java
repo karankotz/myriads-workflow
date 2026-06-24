@@ -33,6 +33,11 @@ public final class Workflow {
         return name;
     }
 
+    /** The id of the {@link Pipeline} this workflow runs on (e.g. {@code sequential}). */
+    public String pipelineId() {
+        return pipeline.id();
+    }
+
     /** The ordered names of this workflow's stages, for display before a run. */
     public List<String> stageNames() {
         return stages.stream().map(Stage::name).toList();

@@ -4,6 +4,7 @@ import com.myriads.workflow.agent.Agent;
 import com.myriads.workflow.core.StageResult;
 import com.myriads.workflow.core.Workflow;
 import com.myriads.workflow.core.WorkflowContext;
+import com.myriads.workflow.core.WorkflowListener;
 import com.myriads.workflow.core.WorkflowResult;
 import com.myriads.workflow.pipeline.PipelineRegistry;
 import com.myriads.workflow.pipeline.SequentialPipeline;
@@ -12,6 +13,7 @@ import com.myriads.workflow.web.WorkflowServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -31,7 +33,40 @@ public final class Main {
             serve(args);
             return;
         }
+        if (args.length > 0 && args[0].equalsIgnoreCase("ai")) {
+            runAi(args);
+            return;
+        }
         runDemo();
+    }
+
+    /** Runs the Claude-backed agent crew from the command line: {@code ai [goal...]}. */
+    private static void runAi(String[] args) {
+        String goal = args.length > 1
+                ? String.join(" ", Arrays.copyOfRange(args, 1, args.length))
+                : "introduce the Myriads distributed workflow engine";
+
+        Workflow workflow = DemoWorkflows.catalog().get("ai-research-crew").orElseThrow();
+        WorkflowContext context = new WorkflowContext("ai-cli").put("goal", goal);
+
+        WorkflowResult result = workflow.run(context, new WorkflowListener() {
+            @Override
+            public void onStageStarted(String runId, String stageName) {
+                log.info("→ {} thinking…", stageName);
+            }
+
+            @Override
+            public void onStageCompleted(String runId, StageResult stage) {
+                if (stage.isSuccess()) {
+                    log.info("[{}]\n{}", stage.stageName(), stage.output());
+                } else {
+                    log.error("[{}] failed: {}", stage.stageName(),
+                            stage.error() == null ? "?" : stage.error().getMessage());
+                }
+            }
+        });
+
+        log.info("AI workflow completed={}", result.completed());
     }
 
     /** Starts the web portal and blocks until the JVM is shut down. */

@@ -180,7 +180,10 @@ public final class WorkflowServer {
     // --- payloads ----------------------------------------------------------
 
     private static Map<String, Object> summary(Workflow workflow) {
-        return Map.of("name", workflow.name(), "stages", workflow.stageNames());
+        return Map.of(
+                "name", workflow.name(),
+                "pipeline", workflow.pipelineId(),
+                "stages", workflow.stageNames());
     }
 
     private static Map<String, Object> resultPayload(WorkflowResult result) {

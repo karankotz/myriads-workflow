@@ -5,6 +5,35 @@ A starter for a **distributed agentic workflow** engine, built as a Java 21 / Ma
 This repo intentionally ships a small, clean core. The execution model is pluggable so
 new ways of composing and running pipelines can be added incrementally.
 
+## What's inside
+
+- **Pluggable pipelines** — `SequentialPipeline` and `ParallelPipeline` (virtual-thread fan-out), selected by id from a registry.
+- **Real AI agents** — `ClaudeAgent` runs Claude API calls as ordinary stages ([Anthropic Java SDK](https://github.com/anthropics/anthropic-sdk-java)).
+- **Human-in-the-loop** — stages return `SUCCESS` / `HALT` / `FAILED`, so runs can gate on approval or abort safely.
+- **Live web portal** — a dashboard that runs every workflow and lights up each stage in real time over SSE.
+
+## Use cases
+
+The same building blocks — `Stage`/`Agent`, `Pipeline`, `WorkflowContext`, `WorkflowListener` —
+map onto a wide range of real-world workflows. The portal's live view makes each one
+observable: you watch exactly which step is running and where it stalls.
+
+| Use case | Shape | Engine features it leans on |
+|----------|-------|------------------------------|
+| **Agentic research / content** | plan → research → draft → review → publish | `ClaudeAgent` crew, context hand-off, `HALT` for human review |
+| **Customer onboarding / KYC** | validate → screen → score → approval gate → provision | `HALT` approval gate, abort-and-skip on failure |
+| **CI/CD release** | build → test → scan → deploy → smoke-test → promote | `FAILED` aborts before prod; `WorkflowListener` → dashboards |
+| **Data / ETL ingestion** | fetch → validate → transform → load → reconcile | `ParallelPipeline` fan-out on transform; safe abort before load |
+| **Incident response** | detect → triage → mitigate → notify → verify | `HALT` for severity decisions; live timeline view |
+| **Loan / claims / orders** | submit → enrich → policy check → decision → fulfil | all three outcomes: approve / review (`HALT`) / reject (`FAILED`) |
+| **LLM agent crews** | specialized agents (researcher, coder, critic) | `ClaudeAgent` per role, shared `WorkflowContext` scratchpad |
+| **Parallel scans / multi-region** | run independent steps at once | `ParallelPipeline` (one virtual thread per stage) |
+
+Several of these ship as runnable demo workflows in the portal — see [Web portal](#web-portal).
+The **distributed** roadmap item (dispatching stages to remote workers) is the natural next
+step for the CI/CD, ETL, and agent-crew cases; the `Pipeline` interface is the seam where it
+plugs in.
+
 ## Requirements
 
 - Java 21+
@@ -34,6 +63,44 @@ Run the tests on their own:
 ```bash
 mvn test
 ```
+
+## AI agents (Claude-backed)
+
+`ClaudeAgent` is a real LLM agent: it builds a prompt from the run context, calls the
+Claude API via the [Anthropic Java SDK](https://github.com/anthropics/anthropic-sdk-java),
+and returns the model's text as its stage output. Because it implements the same `Agent`
+interface, it drops into any pipeline — and the portal — exactly like a hand-written stage.
+
+The bundled **`ai-research-crew`** workflow chains three Claude agents, each reading the
+previous one's output from the `WorkflowContext`:
+
+```
+planner ──▶ researcher ──▶ writer
+(LLM)        (LLM)          (LLM)
+```
+
+```java
+new ClaudeAgent("planner",
+    "You are a planning agent. Given a goal, outline a focused 3-step plan.",
+    ctx -> "Goal: " + ctx.get("goal", String.class).orElse("...")).asStage()
+```
+
+### Setup
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...      # required for the Claude agents
+export MYRIADS_MODEL=claude-opus-4-8     # optional; this is the default
+```
+
+Run the crew from the CLI:
+
+```bash
+java -jar target/myriads-workflow.jar ai "design a rate limiter"
+```
+
+…or open the portal and run **`ai-research-crew`** live. Without `ANTHROPIC_API_KEY`,
+the first stage fails with a clear message (visible in the portal) instead of crashing —
+the other demo workflows still run, since they're simulated.
 
 ## Web portal
 
@@ -75,6 +142,7 @@ The four bundled demo workflows map to real use cases and exercise every outcome
 | `kyc-onboarding` | customer onboarding / KYC | **halts** at a manual-review gate (amber) |
 | `ci-cd-deploy` | release pipeline | **fails** on a smoke test, skips prod promotion (red) |
 | `security-scan` | parallel scans | runs four stages **concurrently** via `ParallelPipeline` |
+| `ai-research-crew` | **real Claude agents** | three `ClaudeAgent`s chained planner → researcher → writer |
 
 ### HTTP API
 
@@ -96,6 +164,7 @@ run's `WorkflowContext`.
 | `StageResult` | Outcome of a stage: `SUCCESS`, `FAILED`, or `HALT`, plus an output payload. |
 | `WorkflowContext` | Thread-safe shared state passed through every stage of a run. |
 | `Agent` | An autonomous worker; `asStage()` adapts it into a `Stage`. |
+| `ClaudeAgent` | An `Agent` backed by the Claude API — real LLM work as a drop-in stage. |
 | `Pipeline` | **The main extension point** — a strategy for executing stages. |
 | `PipelineRegistry` | Holds the available pipelines, selected by id. |
 | `Workflow` | A named list of stages run by a chosen `Pipeline`. |
@@ -233,10 +302,10 @@ output.
 ```
 src/main/
 ├── java/com/myriads/workflow/
-│   ├── Main.java                 # entry point: CLI demo, or `serve [port]` for the portal
+│   ├── Main.java                 # entry: CLI demo, `serve [port]`, or `ai [goal]`
 │   ├── core/                     # Stage, StageResult, WorkflowContext, Workflow,
 │   │                             #   WorkflowResult, WorkflowListener
-│   ├── agent/                    # Agent abstraction
+│   ├── agent/                    # Agent abstraction; ClaudeAgent + ClaudeClient
 │   ├── pipeline/                 # Pipeline, PipelineRegistry,
 │   │                             #   SequentialPipeline, ParallelPipeline
 │   └── web/                      # WorkflowServer, WorkflowCatalog, DemoWorkflows
@@ -246,8 +315,9 @@ src/main/
 ## Roadmap
 
 - ~~Parallel pipeline~~ ✅ (`ParallelPipeline`)
+- ~~LLM-backed agents~~ ✅ (`ClaudeAgent`)
 - Branching / conditional pipelines (route on a stage's output)
 - Distributed execution (dispatch stages to remote workers)
-- LLM- and tool-backed agent implementations
+- Tool-using agents (give `ClaudeAgent` tools to call)
 - Persistence / replay of `WorkflowContext`
 - Define and submit workflows from the portal (currently read-only + run)
