@@ -24,6 +24,7 @@ public final class PipelineRegistry {
         PipelineRegistry registry = new PipelineRegistry();
         registry.register(new SequentialPipeline());
         registry.register(new ParallelPipeline());
+        registry.register(new OrchestratorPipeline());
         return registry;
     }
 

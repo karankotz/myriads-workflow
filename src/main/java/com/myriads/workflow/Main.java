@@ -40,13 +40,21 @@ public final class Main {
         runDemo();
     }
 
-    /** Runs the Claude-backed agent crew from the command line: {@code ai [goal...]}. */
+    /**
+     * Runs a Claude-backed workflow from the command line:
+     * {@code ai [goal...]} runs the research crew, {@code ai orchestrate [goal...]}
+     * runs the planner-driven orchestrator.
+     */
     private static void runAi(String[] args) {
-        String goal = args.length > 1
-                ? String.join(" ", Arrays.copyOfRange(args, 1, args.length))
+        boolean orchestrate = args.length > 1 && args[1].equalsIgnoreCase("orchestrate");
+        String workflowName = orchestrate ? "ai-orchestrator" : "ai-research-crew";
+        int goalStart = orchestrate ? 2 : 1;
+
+        String goal = args.length > goalStart
+                ? String.join(" ", Arrays.copyOfRange(args, goalStart, args.length))
                 : "introduce the Myriads distributed workflow engine";
 
-        Workflow workflow = DemoWorkflows.catalog().get("ai-research-crew").orElseThrow();
+        Workflow workflow = DemoWorkflows.catalog().get(workflowName).orElseThrow();
         WorkflowContext context = new WorkflowContext("ai-cli").put("goal", goal);
 
         WorkflowResult result = workflow.run(context, new WorkflowListener() {

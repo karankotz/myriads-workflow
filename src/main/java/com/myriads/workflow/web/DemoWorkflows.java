@@ -5,6 +5,7 @@ import com.myriads.workflow.core.Stage;
 import com.myriads.workflow.core.StageResult;
 import com.myriads.workflow.core.Workflow;
 import com.myriads.workflow.core.WorkflowContext;
+import com.myriads.workflow.pipeline.OrchestratorPipeline;
 import com.myriads.workflow.pipeline.ParallelPipeline;
 import com.myriads.workflow.pipeline.SequentialPipeline;
 
@@ -86,7 +87,50 @@ public final class DemoWorkflows {
                 .register(kycOnboarding)
                 .register(ciCdDeploy)
                 .register(securityScan)
-                .register(aiResearchCrew(sequential));
+                .register(aiResearchCrew(sequential))
+                .register(aiOrchestrator(new OrchestratorPipeline()));
+    }
+
+    /**
+     * A planner agent chooses, at run time, which specialist agents to run for
+     * the goal. The first stage is the planner; the rest are the selectable pool
+     * (see {@link OrchestratorPipeline}). Unchosen agents show as skipped in the
+     * portal. Requires {@code ANTHROPIC_API_KEY}.
+     */
+    private static Workflow aiOrchestrator(OrchestratorPipeline pipeline) {
+        String pool = "researcher, architect, coder, reviewer";
+        return Workflow.named("ai-orchestrator")
+                .using(pipeline)
+                .stage(new ClaudeAgent("planner",
+                        "You are an orchestrator. Available specialist agents: " + pool + ". "
+                                + "Given the goal, decide which agents to run and in what order. "
+                                + "Output ONLY the chosen agent names, in execution order, one per line — "
+                                + "nothing else. Pick the minimal useful subset.",
+                        ctx -> "Goal: " + ctx.get("goal", String.class)
+                                .orElse("build a small URL shortener service")).asStage())
+                .stage(new ClaudeAgent("researcher",
+                        "You are a research agent. Gather the key facts or requirements for the goal. "
+                                + "Respond in under 70 words.",
+                        DemoWorkflows::goalAndPlan).asStage())
+                .stage(new ClaudeAgent("architect",
+                        "You are a software architect. Propose a concise design for the goal. "
+                                + "Respond in under 80 words.",
+                        DemoWorkflows::goalAndPlan).asStage())
+                .stage(new ClaudeAgent("coder",
+                        "You are a coding agent. Sketch the key code or pseudo-code for the goal. "
+                                + "Respond in under 90 words.",
+                        DemoWorkflows::goalAndPlan).asStage())
+                .stage(new ClaudeAgent("reviewer",
+                        "You are a reviewer. Point out the main risks or improvements for the goal. "
+                                + "Respond in under 70 words.",
+                        DemoWorkflows::goalAndPlan).asStage())
+                .build();
+    }
+
+    /** Shared prompt for pool agents: the goal plus the orchestrator's plan. */
+    private static String goalAndPlan(WorkflowContext ctx) {
+        return "Goal: " + ctx.get("goal", String.class).orElse("")
+                + "\nOrchestrator plan:\n" + ctx.get("planner").orElse("");
     }
 
     /**

@@ -92,13 +92,18 @@ export ANTHROPIC_API_KEY=sk-ant-...      # required for the Claude agents
 export MYRIADS_MODEL=claude-opus-4-8     # optional; this is the default
 ```
 
-Run the crew from the CLI:
+Run from the CLI:
 
 ```bash
-java -jar target/myriads-workflow.jar ai "design a rate limiter"
+java -jar target/myriads-workflow.jar ai "design a rate limiter"             # the crew
+java -jar target/myriads-workflow.jar ai orchestrate "build a URL shortener" # planner-driven
 ```
 
-…or open the portal and run **`ai-research-crew`** live. Without `ANTHROPIC_API_KEY`,
+The **`ai-orchestrator`** workflow uses `OrchestratorPipeline`: a planner agent chooses
+which specialists (`researcher`, `architect`, `coder`, `reviewer`) to run for the goal,
+and only those execute — the rest are skipped. See [Pipelines](#pipelines).
+
+…or open the portal and run **`ai-research-crew`** or **`ai-orchestrator`** live. Without `ANTHROPIC_API_KEY`,
 the first stage fails with a clear message (visible in the portal) instead of crashing —
 the other demo workflows still run, since they're simulated.
 
@@ -143,6 +148,7 @@ The four bundled demo workflows map to real use cases and exercise every outcome
 | `ci-cd-deploy` | release pipeline | **fails** on a smoke test, skips prod promotion (red) |
 | `security-scan` | parallel scans | runs four stages **concurrently** via `ParallelPipeline` |
 | `ai-research-crew` | **real Claude agents** | three `ClaudeAgent`s chained planner → researcher → writer |
+| `ai-orchestrator` | **planner-driven** | a planner agent picks which specialists run; the rest are skipped (`OrchestratorPipeline`) |
 
 ### HTTP API
 
@@ -261,6 +267,7 @@ Two are built in and registered by `PipelineRegistry.withDefaults()`:
 |----------|------|-----------|
 | `SequentialPipeline` | `sequential` | runs stages in order; a `FAILED`/`HALT` stops the run |
 | `ParallelPipeline` | `parallel` | runs all stages concurrently (one virtual thread each), waits for all |
+| `OrchestratorPipeline` | `orchestrator` | a **planner agent** picks which agents to run at run time; unchosen agents are skipped |
 
 `ParallelPipeline` suits **independent** stages (parallel scans, multi-region deploys, an
 agent crew that doesn't share state). Because stages run at once, ordering between them is
@@ -306,8 +313,8 @@ src/main/
 │   ├── core/                     # Stage, StageResult, WorkflowContext, Workflow,
 │   │                             #   WorkflowResult, WorkflowListener
 │   ├── agent/                    # Agent abstraction; ClaudeAgent + ClaudeClient
-│   ├── pipeline/                 # Pipeline, PipelineRegistry,
-│   │                             #   SequentialPipeline, ParallelPipeline
+│   ├── pipeline/                 # Pipeline, PipelineRegistry, SequentialPipeline,
+│   │                             #   ParallelPipeline, OrchestratorPipeline
 │   └── web/                      # WorkflowServer, WorkflowCatalog, DemoWorkflows
 └── resources/web/index.html      # the single-page portal UI
 ```
@@ -316,7 +323,7 @@ src/main/
 
 - ~~Parallel pipeline~~ ✅ (`ParallelPipeline`)
 - ~~LLM-backed agents~~ ✅ (`ClaudeAgent`)
-- Branching / conditional pipelines (route on a stage's output)
+- ~~Planner-driven orchestration~~ ✅ (`OrchestratorPipeline`)
 - Distributed execution (dispatch stages to remote workers)
 - Tool-using agents (give `ClaudeAgent` tools to call)
 - Persistence / replay of `WorkflowContext`
